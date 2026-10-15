@@ -1,0 +1,6 @@
+# Talking to real or simulated devices also needs the NI-DAQmx driver from NI
+# (Windows/Linux only); nidaqmx is just the Python wrapper around it.
+nidaqmx
+numpy
+matplotlib
+jupyter
