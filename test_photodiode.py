@@ -40,11 +40,15 @@ def blade_period(pd, rate):
     return threshold, np.median(np.diff(starts)) / rate
 
 
-# Show which DAQ devices the PC can see, so a wrong DEV name is obvious
-names = [d.name for d in nidaqmx.system.System.local().devices]
-print("Devices found:", names)
-if DEV not in names:
-    raise SystemExit(f"'{DEV}' not found. Set DEV at the top of this file to one of {names}.")
+# Show which DAQ devices the PC can see, so a wrong DEV name is obvious.
+# A simulated device (made in NI MAX) returns a fake sine wave, not your signal.
+devices = {d.name: d for d in nidaqmx.system.System.local().devices}
+for d in devices.values():
+    print(f"Device found: {d.name} ({d.product_type}{', SIMULATED' if d.dev_is_simulated else ''})")
+if DEV not in devices:
+    raise SystemExit(f"'{DEV}' not found. Set DEV at the top of this file to one of {list(devices)}.")
+if devices[DEV].dev_is_simulated:
+    raise SystemExit(f"'{DEV}' is a simulated device. Set DEV to your real DAQ's name.")
 
 t, pd = record(RATE, DURATION)
 print(f"Recorded {pd.size} samples: min {pd.min():.3f} V, max {pd.max():.3f} V")
