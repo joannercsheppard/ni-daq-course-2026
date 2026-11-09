@@ -1,6 +1,6 @@
 """Quick fan test: spin the fan from AO0 on the NI DAQ.
 
-Run with:  python fan_test.py
+Run from the repository's root folder:  uv run python rig_checks/check_fan.py
 Type a voltage (e.g. 3) and press Enter to set the fan speed.
 Type q (or press Ctrl+C) to stop. The fan is always set back to 0 V on exit.
 """

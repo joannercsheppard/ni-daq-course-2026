@@ -1,10 +1,11 @@
 """Quick photodiode test: record AI0 on the NI DAQ, save it, and plot it.
 
 The fan and laser are powered separately (not from the DAQ); this only records.
-Run with:  python test_photodiode.py
-Saves photodiode_<time>.csv (columns: time_s, volts) and shows a plot.
+Run from the repository's root folder:  uv run python rig_checks/check_photodiode.py
+Saves data/photodiode_<time>.csv (columns: time_s, volts) and shows a plot.
 """
 import time
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,6 +18,7 @@ DEV = "Dev1"          # change if NI MAX shows a different name
 PD_CHAN = f"{DEV}/ai0"
 RATE = 20_000         # samples/s. Check your device's maximum (e.g. USB-6001 is 20 kS/s)
 DURATION = 1.0        # s to record
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 
 def record(rate, duration):
@@ -59,7 +61,8 @@ if period is None:
 else:
     print(f"Blade period ≈ {period * 1000:.2f} ms ({1 / period:.1f} blades/s)")
 
-fname = time.strftime("photodiode_%Y%m%d_%H%M%S.csv")
+DATA_DIR.mkdir(exist_ok=True)
+fname = DATA_DIR / time.strftime("photodiode_%Y%m%d_%H%M%S.csv")
 np.savetxt(fname, np.column_stack([t, pd]), delimiter=",", header="time_s,volts", comments="")
 print("Saved", fname)
 

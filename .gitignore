@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Recorded data: keep the folder, not the recordings
+data/*
+!data/.gitkeep
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/

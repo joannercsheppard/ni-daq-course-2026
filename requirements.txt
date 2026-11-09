@@ -1,6 +1,7 @@
+# For plain pip only. The main setup uses uv: see pyproject.toml and README.md.
 # Talking to real or simulated devices also needs the NI-DAQmx driver from NI
 # (Windows/Linux only); nidaqmx is just the Python wrapper around it.
-nidaqmx
-numpy
-matplotlib
-jupyter
+nidaqmx>=1.0
+numpy>=1.24
+matplotlib>=3.7
+jupyter>=1.0
