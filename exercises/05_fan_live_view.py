@@ -6,13 +6,15 @@ Task
 ----
 This is the start of the fan blade experiment (exercises 05-07). A laser beam
 passes through a spinning fan onto a photodiode, and each passing blade makes
-the signal dip. In 05 you align the setup, in 06 you record, and in 07 you
+the signal jump up (on this rig the photodiode reads near 0 V while the
+beam is clear and high while a blade blocks it). In 05 you align the setup, in 06 you record, and in 07 you
 work out the blade width from the recordings.
 
 Here you show the photodiode signal live while you line up the laser, the fan
 and the photodiode. The live plot is provided. You only need to set up the
 continuous AI task (one TODO), exactly as in warm-up 04, so you can start
 aligning straight away.
+Reference: notebooks/fan_blade_width.ipynb, section 1.
 
 The DAQ only records here. The fan and the laser run from their own power
 supplies and are NOT connected to the DAQ.
@@ -33,9 +35,9 @@ Close the plot window (or press Ctrl+C) to stop.
 Expected behaviour
 ------------------
 * A window shows the last CHUNK samples (250 ms), updated 4 times a second.
-* With the beam aligned and the fan spinning, you see a regular train of dips:
-  the top of the trace is the "light" level, the bottom of each dip is the
-  "dark" level when a blade fully blocks the beam.
+* With the beam aligned and the fan spinning, you see a regular train of
+  pulses: the bottom of the trace is the "unblocked" level, and the top of
+  each pulse is the "blocked" level when a blade fully blocks the beam.
 * The title shows both levels and the contrast between them. Adjust the
   alignment until the contrast is as large as you can get it. A contrast below
   about 0.1 V is too small to analyse.
@@ -43,10 +45,10 @@ Expected behaviour
 Investigation questions
 -----------------------
 1. Block the beam with a card, then switch the room lights on and off. How
-   much does the dark level change? Why does the analysis set its threshold
-   from each recording's own dark and light levels, not a fixed voltage?
-2. Read the time from one dip to the next off the x-axis (measure across
-   several dips and divide, for accuracy). Using the number of blades on the
+   much does the blocked level change? Why should the threshold sit between
+   your own rig's two levels, rather than at a fixed voltage?
+2. Read the time from one pulse to the next off the x-axis (measure across
+   several pulses and divide, for accuracy). Using the number of blades on the
    fan, estimate the fan's speed in revolutions per minute. You'll compare
    this with the analysed value in exercise 07.
 """
@@ -120,10 +122,10 @@ def main():
         t_end = time.time() + VIEW_FOR
         while time.time() < t_end and win.isVisible():
             chunk = np.asarray(task.read(number_of_samples_per_channel=CHUNK))
-            dark, light = np.percentile(chunk, [5, 95])
+            low, high = np.percentile(chunk, [5, 95])
             curve.setData(x_ms, chunk)
-            win.setTitle(f"dark ≈ {dark:.2f} V    light ≈ {light:.2f} V    "
-                         f"contrast {light - dark:.2f} V")
+            win.setTitle(f"unblocked ≈ {low:.2f} V    blocked ≈ {high:.2f} V    "
+                         f"contrast {high - low:.2f} V")
             app.processEvents()  # redraw the window and handle clicks
 
     win.close()

@@ -24,9 +24,12 @@ Wiring: loopback, **AO0 → AI0** and AO GND → AI GND.
 ## Part 2: Fan blade experiment
 
 A laser beam passes through a spinning fan onto a photodiode. Each time a blade passes,
-it blocks the beam and the photodiode signal dips. You record 1000 blade passes, overlay
-them, and fit Gaussians to the edges of the dip. From the dip's length (τ) and the time
-between dips (T), you work out how wide the blades are, without touching the fan.
+it blocks the beam and the photodiode signal jumps up (this rig reads near 0 V while the
+beam is clear). You record 1000 blade arrivals and how long each blade blocks the beam,
+then use two Gaussian fits: one to the rising edge (which measures the beam), and one to the
+histogram of 1000 widths (which gives the blade width). From how long each blade blocks the
+beam (τ) and the time between blades (T), you work out how wide the blades are, without
+touching the fan.
 
 ```
           laser ───────────────► ┃ ◄─ fan blade ─► photodiode ──► AI0
@@ -40,7 +43,8 @@ This is a small model of two everyday neuroscience instruments:
 - **Ephys rig:** the blade passes are captured like spikes: a short snippet around each
   threshold crossing, overlaid and averaged to show the waveform's shape.
 
-The full background is in [`notebooks/fan_blade_width.ipynb`](../notebooks/fan_blade_width.ipynb).
+The full background, and a worked version of exercises 05–07 (sections 1–3), is in
+[`notebooks/fan_blade_width.ipynb`](../notebooks/fan_blade_width.ipynb).
 
 ### Wiring and safety
 
@@ -61,15 +65,15 @@ at its supply before reaching near it.
 
 | Step | Do | Script | Time |
 |---|---|---|---|
-| 1 | Set up the live view (1 TODO) and align the laser and photodiode until the dips are as deep as possible | `05_fan_live_view.py` | 20 min |
+| 1 | Set up the live view (1 TODO) and align the laser and photodiode until the pulses are as tall as possible | `05_fan_live_view.py` | 20 min |
 | 2 | Count the blades and measure the beam's distance from the hub. Enter them in `07_fan_analyse.py`. | — | 5 min |
 | 3 | Fill in the 3 TODOs and record 1000 blade passes | `06_fan_record.py` | 15 min |
-| 4 | Fill in the 5 analysis TODOs and fit the blade width (and the beam's diameter) | `07_fan_analyse.py` | 30 min |
+| 4 | Fill in the 6 analysis TODOs and fit the blade width (and the beam's diameter) | `07_fan_analyse.py` | 30 min |
 | 5 | Switch off the laser and the fan at their supplies | — | — |
 
 The times include the investigation questions, which have you re-run 06 and 07 with
-different thresholds. Recordings are saved in `data/` as `.npz` files (the snippets, the
-crossing times and the sample rate), so you can re-analyse them later:
+different thresholds. Recordings are saved in `data/` as `.npz` files (the snippets, when
+each blade arrived, how long it blocked the beam, and the sample rate), so you can re-analyse them later:
 
 ```bash
 uv run python exercises/07_fan_analyse.py                     # newest recording
