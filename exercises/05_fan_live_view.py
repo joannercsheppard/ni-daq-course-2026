@@ -53,8 +53,8 @@ Investigation questions
 
 import time
 
-import matplotlib.pyplot as plt
 import numpy as np
+import pyqtgraph as pg
 
 import nidaqmx
 import nidaqmx.system
@@ -100,13 +100,15 @@ def require(value, todo):
 def main():
     check_device(DEV, RATE)
 
-    plt.ion()
-    fig, ax = plt.subplots(figsize=(10, 3.5))
-    (line,) = ax.plot(np.arange(CHUNK) / RATE * 1000, np.zeros(CHUNK), lw=0.8)
-    ax.set_ylim(-0.2, Y_MAX)
-    ax.set_xlabel("Time within update (ms)")
-    ax.set_ylabel("Photodiode (V)")
-    fig.tight_layout()
+    app = pg.mkQApp("Fan live view")
+    win = pg.PlotWidget()
+    win.resize(1000, 350)
+    win.setYRange(-0.2, Y_MAX)
+    win.setLabel("bottom", "Time within update (ms)")
+    win.setLabel("left", "Photodiode (V)")
+    x_ms = np.arange(CHUNK) / RATE * 1000
+    curve = win.plot(x_ms, np.zeros(CHUNK))
+    win.show()
 
     with nidaqmx.Task() as task:
         # TODO 1: Add PD_CHAN as an AI voltage channel (RSE, -10 V to +10 V),
@@ -116,16 +118,15 @@ def main():
         require(task.channel_names or None, "TODO 1")
 
         t_end = time.time() + VIEW_FOR
-        while time.time() < t_end and plt.fignum_exists(fig.number):
+        while time.time() < t_end and win.isVisible():
             chunk = np.asarray(task.read(number_of_samples_per_channel=CHUNK))
             dark, light = np.percentile(chunk, [5, 95])
-            line.set_ydata(chunk)
-            ax.set_title(f"dark ≈ {dark:.2f} V    light ≈ {light:.2f} V    "
+            curve.setData(x_ms, chunk)
+            win.setTitle(f"dark ≈ {dark:.2f} V    light ≈ {light:.2f} V    "
                          f"contrast {light - dark:.2f} V")
-            plt.pause(0.001)
+            app.processEvents()  # redraw the window and handle clicks
 
-    plt.ioff()
-    plt.close(fig)
+    win.close()
     print("Live view stopped.")
 
 

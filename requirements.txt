@@ -4,4 +4,6 @@
 nidaqmx>=1.0
 numpy>=1.24
 matplotlib>=3.7
+pyqtgraph>=0.13
+PyQt6>=6.5
 jupyter>=1.0
