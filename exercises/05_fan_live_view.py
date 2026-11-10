@@ -69,7 +69,7 @@ PD_CHAN = f"{DEV}/ai0"  # photodiode
 RATE = 20_000           # samples/s. Check your device's maximum (e.g. USB-6001: 20 kS/s)
 CHUNK = 5_000           # samples per update (250 ms at 20 kS/s)
 VIEW_FOR = 120.0        # seconds before the live view stops by itself
-Y_MAX = 5.0             # top of the plot's y-axis (V)
+Y_MAX = 6.0             # top of the plot's y-axis (V)
 
 
 # ---------------------------------------------------------------------------

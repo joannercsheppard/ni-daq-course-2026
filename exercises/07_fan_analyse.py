@@ -4,50 +4,64 @@ Exercise 07: Fan experiment, measure the blade width              (about 30 min)
 
 Task
 ----
-Turn a photodiode recording into a blade width. Each time a blade passes, it
-blocks the beam and the signal dips:
+Turn the blade passes from exercise 06 into a blade width by fitting Gaussians.
 
-    photodiode   ─────┐     ┌─────────┐     ┌─────────┐     ┌────
-    signal            │     │         │     │         │     │
-                      └─────┘         └─────┘         └─────┘
-                      ◄─ τ ─►
-                      ◄────── T ──────►
+The laser beam's brightness falls off as a Gaussian from its centre. As a
+blade edge sweeps across it, the light reaching the photodiode changes
+smoothly, and the SLOPE of that change is the Gaussian itself. Its peak is the
+moment the edge crosses the centre of the beam:
 
-  1. Pulses (TODOs 1-2): the threshold is halfway between the dark and light
-     levels (provided). Find where the signal crosses it, which gives each
-     pulse's start and width τ. This is how spikes are detected in ephys.
-  2. Width (TODOs 3-4): time becomes distance, as in a scanning microscope.
-         blade period         T = median time between pulse starts
+    mean of the       ─────┐                  ┌─────
+    snippets               └──────────────────┘
+
+    slope of            ───╮╭────────────────╭╮───
+    the mean               ╰╯                ╰╯
+                       t_arrive   ◄── τ ──►  t_leave
+
+  1. Mean and slope (TODO 1): average the snippets, then take the slope.
+  2. Fit the edges (TODOs 2-3): fit a Gaussian to the slope at each edge.
+     The two centres give the time τ that the blade takes to pass the beam,
+     to a fraction of a sample.
+  3. Width (TODOs 4-5): time becomes distance, as in a scanning microscope.
+         blade period         T = mean time between threshold crossings
          rotation frequency   f = 1 / (N_BLADES * T)
          blade speed at beam  v = 2π * BEAM_RADIUS_MM * f
-         blade width          w = v * τ - BEAM_DIAMETER_MM
+         blade width          w = v * τ
+         beam diameter        d = 4 * v * σ   (σ of the arriving edge's Gaussian)
+
+  Both centres are measured at the middle of the beam, so the beam's size
+  cancels out of w. The fitted σ measures the beam itself: this is the
+  "knife-edge" method used to measure laser spots on real microscopes.
 
 Before you start
 ----------------
 * Record with exercise 06. (With SIMULATE = True there, the true width is
-  15 mm, using the settings below as they are.)
-* Measure your fan and optics and enter them in the settings below.
+  about 15 mm and the beam 1 mm, using the settings below as they are.)
+* Count the blades and measure the beam's distance from the fan's axis, and
+  enter them in the settings below.
 
 Run from the repository's root folder:
     uv run python exercises/07_fan_analyse.py                     # newest recording in data/
-    uv run python exercises/07_fan_analyse.py data/<file>.csv     # a particular recording
+    uv run python exercises/07_fan_analyse.py data/<file>.npz     # a particular recording
 
 Expected behaviour
 ------------------
-* Prints the number of pulses found, the fan's speed in rpm and the median
-  blade width with its spread. With simulated data, the width is close to 15 mm.
-* Plots the first 100 ms with the detected pulses shaded orange: each shaded
-  region should line up with a dip.
+* Prints the fan's speed, the edge times, the blade width and the beam
+  diameter. With simulated data: width close to 15 mm, beam close to 1 mm.
+* Plots the mean snippet with the blade shaded between the fitted edges, and
+  the slope with the two fitted Gaussians on top of it.
 
 Investigation questions
 -----------------------
 1. Measure a blade with a ruler and compare. Fan blades are angled (pitched):
    which width does the beam actually measure?
-2. Set RATE = 2_000 in exercise 06, record and analyse again. How many samples
-   long is each pulse now? An edge can only be placed to the nearest sample:
-   how many mm of blade width is one sample worth at 2 kS/s, and at 20 kS/s?
-   An action potential lasts about 1 ms: what sample rate would you need to
-   measure spike widths?
+2. Record twice in exercise 06 with different values of THRESHOLD_V. Does the
+   blade width change? Why not, when the threshold moves where each snippet
+   starts?
+3. Is the Gaussian at the leaving edge wider than at the arriving edge? Why?
+   (Hint: your answer to question 1 in exercise 06.)
+4. Each edge is only a few samples long, yet the fit places it to a fraction
+   of a sample. Where does that extra precision come from?
 """
 
 import sys
@@ -55,13 +69,14 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.optimize import curve_fit
 
 # ---------------------------------------------------------------------------
 # Settings: measure these on your rig!
 # ---------------------------------------------------------------------------
 N_BLADES = 7
 BEAM_RADIUS_MM = 30.0     # distance from the fan's axis to the laser beam
-BEAM_DIAMETER_MM = 1.0    # laser spot size at the fan
+EDGE_FIT_MS = 0.5         # fit each Gaussian to the slope within this time of the edge
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
@@ -76,103 +91,119 @@ def require(value, todo):
 
 
 def load_recording():
-    """Load the CSV named on the command line, or the newest one in data/. Returns (t, pd, rate)."""
+    """Load the .npz named on the command line, or the newest in data/.
+
+    Returns (snippets, crossings, rate, pre).
+    """
     if len(sys.argv) > 1:
         path = Path(sys.argv[1])
     else:
-        files = sorted(DATA_DIR.glob("*.csv"), key=lambda p: p.stat().st_mtime)
+        files = sorted(DATA_DIR.glob("*.npz"), key=lambda p: p.stat().st_mtime)
         if not files:
             raise SystemExit("No recordings found. Record one with exercises/06_fan_record.py first.")
         path = files[-1]
-    data = np.loadtxt(path, delimiter=",", skiprows=1)
-    t, pd = data[:, 0], data[:, 1]
-    rate = round(1 / (t[1] - t[0]))
-    print(f"File: {path.name} ({len(pd)} samples at {rate} samples/s)")
-    return t, pd, rate
+    f = np.load(path)
+    snippets, rate, pre = f["snippets"], int(f["rate"]), int(f["pre"])
+    print(f"File: {path.name} ({len(snippets)} blade passes, "
+          f"{snippets.shape[1]} samples each at {rate} samples/s)")
+    return snippets, f["crossings"], rate, pre
 
 
 # ---------------------------------------------------------------------------
 # Your analysis
 # ---------------------------------------------------------------------------
-def find_pulses(signal, threshold, rate):
-    """Find the intervals where signal < threshold. Returns (starts, widths) in seconds."""
-    # TODO 1: Replace None with `blocked`: an array of 0s and 1s, 1 where
-    #         signal < threshold.
-    #         Hint: a comparison gives True/False; .astype(int) turns it into 1/0.
-    blocked = None
-    require(blocked, "TODO 1")
-
-    # TODO 2: np.diff(blocked) is +1 where a blade arrives (0 -> 1) and -1
-    #         where it leaves (1 -> 0). Replace the Nones with the sample indices
-    #         of the arrivals (`starts`) and the departures (`ends`).
-    #         Hint: np.flatnonzero(condition) gives the indices where it's true.
-    #         Add 1, because np.diff is one sample shorter than its input.
-    starts = None
-    ends = None
-    require(starts, "TODO 2")
-    require(ends, "TODO 2")
-
-    # Provided: keep only complete pulses (drop one already underway when the
-    # recording started, and one still underway when it ended), and ignore
-    # "pulses" shorter than 0.2 ms, which are noise near the threshold.
-    if starts.size == 0 or ends.size == 0:
-        return np.array([]), np.array([])
-    ends = ends[ends > starts[0]]
-    n = min(starts.size, ends.size)
-    starts, ends = starts[:n], ends[:n]
-    keep = (ends - starts) / rate >= 0.2e-3
-    return starts[keep] / rate, (ends - starts)[keep] / rate
+def gaussian(t, amplitude, centre, sigma):
+    """A Gaussian of height `amplitude`, centred on `centre`, with width `sigma`."""
+    # TODO 2: Replace None with amplitude * exp(-(t - centre)² / (2 * sigma²)).
+    #         Use np.exp, so that it works on a whole array of times t.
+    return None
 
 
-def blade_widths(starts, widths):
-    """Per-pulse blade width (mm) and the rotation frequency (Hz)."""
-    # TODO 3: Replace the Nones with the blade period T (the median time
-    #         between successive pulse starts; np.diff helps again) and the
-    #         rotation frequency f = 1 / (N_BLADES * T).
-    blade_period = None
-    rot_freq = None
-    require(blade_period, "TODO 3")
-    require(rot_freq, "TODO 3")
+def fit_edge(t, slope, around):
+    """Fit a Gaussian to `slope` within EDGE_FIT_MS of time `around`.
 
-    # TODO 4: Replace the Nones with the blade speed at the beam,
-    #         v = 2π * BEAM_RADIUS_MM * f (mm/s), and the width of every pulse
-    #         in mm: v * widths - BEAM_DIAMETER_MM.
-    speed_mm_s = None
-    w_mm = None
-    require(speed_mm_s, "TODO 4")
-    require(w_mm, "TODO 4")
-    return w_mm, rot_freq
+    Returns (amplitude, centre, sigma). Times are in seconds.
+    """
+    dt = t[1] - t[0]
+    near = np.abs(t - around) <= max(EDGE_FIT_MS / 1000, 4 * dt)
+    guess = [slope[near].max(), around, 2 * dt]
+    require(gaussian(t[near], *guess), "TODO 2")
+
+    # TODO 3: Replace None with the fitted parameters. curve_fit(model, x, y,
+    #         p0=guess) fits model(x, *params) to y, starting from `guess`,
+    #         and returns (params, covariance). Fit `gaussian` to t[near]
+    #         and slope[near], and keep only params.
+    params = None
+    require(params, "TODO 3")
+    return params
 
 
 # ---------------------------------------------------------------------------
 def main():
-    t, pd, rate = load_recording()
+    snippets, crossings, rate, pre = load_recording()
+    t = (np.arange(snippets.shape[1]) - pre) / rate   # s, 0 = threshold crossing
+    t_mid = t[:-1] + 0.5 / rate                       # times between samples, for np.diff
 
-    dark, light = np.percentile(pd, [5, 95])
-    threshold = (dark + light) / 2
-    if light - dark < 0.1:
-        raise SystemExit("Very little contrast between light and dark. Check the alignment (exercise 05).")
+    # TODO 1: Replace the Nones with the mean of the snippets (one value per
+    #         time point, so average over axis=0), and its slope in V/s:
+    #         the difference between neighbouring samples (np.diff) times rate.
+    mean = None
+    slope = None
+    require(mean, "TODO 1")
+    require(slope, "TODO 1")
 
-    starts, widths = find_pulses(pd, threshold, rate)
-    if len(starts) < 2:
-        raise SystemExit("Fewer than 2 pulses found. Is the fan spinning and the beam aligned?")
-    w_mm, rot_freq = blade_widths(starts, widths)
+    # TODO 4: Replace the Nones with the blade period T in seconds (the mean
+    #         number of samples between successive crossings, divided by rate),
+    #         the rotation frequency f = 1 / (N_BLADES * T), and the blade
+    #         speed at the beam v = 2π * BEAM_RADIUS_MM * f (mm/s).
+    blade_period = None
+    rot_freq = None
+    speed_mm_s = None
+    require(blade_period, "TODO 4")
+    require(rot_freq, "TODO 4")
+    require(speed_mm_s, "TODO 4")
 
-    print(f"Pulses:      {len(widths)} found, median width {np.median(widths) * 1e3:.3f} ms")
-    print(f"Fan speed:   {rot_freq * 60:.0f} rpm")
-    print(f"Blade width: {np.median(w_mm):.2f} mm (median, spread ±{np.std(w_mm):.2f} mm)")
+    # Provided: the arriving edge is at t = 0 and the slope there is negative,
+    # so fit -slope. The leaving edge is the biggest rise within one blade
+    # period after that.
+    a_arrive, t_arrive, sigma_arrive = fit_edge(t_mid, -slope, around=0.0)
+    after = (t_mid > EDGE_FIT_MS / 1000) & (t_mid < blade_period)
+    if not after.any() or slope[after].max() < 0.5 * (-slope).max():
+        raise SystemExit("No leaving edge in the snippets. Increase POST in exercise 06.")
+    a_leave, t_leave, sigma_leave = fit_edge(t_mid, slope, around=t_mid[after][np.argmax(slope[after])])
 
-    show = t < 0.1
-    plt.figure(figsize=(10, 3))
-    plt.plot(t[show] * 1000, pd[show], lw=0.8)
-    plt.axhline(threshold, color="k", ls=":", label="threshold")
-    for s, w in zip(starts, widths):
-        if s < 0.1:
-            plt.axvspan(s * 1000, (s + w) * 1000, color="orange", alpha=0.3)
-    plt.xlabel("Time (ms)")
-    plt.ylabel("Photodiode (V)")
-    plt.title("Detected pulses (first 100 ms)")
-    plt.legend(loc="lower right")
+    # TODO 5: Replace the Nones with the blade width in mm, v * (t_leave - t_arrive),
+    #         and the beam diameter in mm, 4 * v * sigma_arrive.
+    w_mm = None
+    beam_mm = None
+    require(w_mm, "TODO 5")
+    require(beam_mm, "TODO 5")
+
+    print(f"Fan speed:     {rot_freq * 60:.0f} rpm (blade period {blade_period * 1e3:.2f} ms)")
+    print(f"Edges:         arrives {t_arrive * 1e3:.3f} ms, leaves {t_leave * 1e3:.3f} ms "
+          f"(σ {abs(sigma_arrive) * 1e3:.3f} and {abs(sigma_leave) * 1e3:.3f} ms)")
+    print(f"Blade width:   {w_mm:.2f} mm")
+    print(f"Beam diameter: {abs(beam_mm):.2f} mm (1/e², from the arriving edge)")
+
+    t_ms, mid_ms = t * 1e3, t_mid * 1e3
+    show = (t > -1e-3) & (t < t_leave + 1e-3)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+    ax1.plot(t_ms[show], snippets[:200, show].T, color="tab:blue", lw=0.5, alpha=0.05)
+    ax1.plot(t_ms[show], mean[show], color="k", lw=1.5, label="mean")
+    ax1.axvspan(t_arrive * 1e3, t_leave * 1e3, color="orange", alpha=0.2, label=f"blade: {w_mm:.2f} mm")
+    ax1.set_ylabel("Photodiode (V)")
+    ax1.legend(loc="lower right")
+    ax1.set_title("Blade passes and their mean")
+
+    show = show[:-1]
+    ax2.plot(mid_ms[show], slope[show] / 1e3, color="k", lw=1, label="slope of the mean")
+    for a, centre, sigma in [(-a_arrive, t_arrive, sigma_arrive), (a_leave, t_leave, sigma_leave)]:
+        ax2.plot(mid_ms[show], gaussian(t_mid[show], a, centre, sigma) / 1e3,
+                 color="tab:red", lw=1.5, ls="--")
+    ax2.plot([], [], color="tab:red", ls="--", label="fitted Gaussians")
+    ax2.set_xlabel("Time from threshold crossing (ms)")
+    ax2.set_ylabel("Slope (V/ms)")
+    ax2.legend(loc="lower right")
     plt.tight_layout()
     plt.show()
 

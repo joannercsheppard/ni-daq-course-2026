@@ -24,8 +24,9 @@ Wiring: loopback, **AO0 → AI0** and AO GND → AI GND.
 ## Part 2: Fan blade experiment
 
 A laser beam passes through a spinning fan onto a photodiode. Each time a blade passes,
-it blocks the beam and the photodiode signal dips. From the length of each dip (τ) and
-the time between dips (T), you work out how wide the blades are, without touching the fan.
+it blocks the beam and the photodiode signal dips. You record 1000 blade passes, overlay
+them, and fit Gaussians to the edges of the dip. From the dip's length (τ) and the time
+between dips (T), you work out how wide the blades are, without touching the fan.
 
 ```
           laser ───────────────► ┃ ◄─ fan blade ─► photodiode ──► AI0
@@ -36,8 +37,8 @@ This is a small model of two everyday neuroscience instruments:
 
 - **Scanning microscope:** time is converted into position (size = speed × time), as when
   a two-photon microscope builds an image from a single PMT.
-- **Ephys rig:** the blade pulses are detected like spikes, with a threshold, then each
-  one's width and the interval between them are measured.
+- **Ephys rig:** the blade passes are captured like spikes: a short snippet around each
+  threshold crossing, overlaid and averaged to show the waveform's shape.
 
 The full background is in [`notebooks/fan_blade_width.ipynb`](../notebooks/fan_blade_width.ipynb).
 
@@ -61,22 +62,22 @@ at its supply before reaching near it.
 | Step | Do | Script | Time |
 |---|---|---|---|
 | 1 | Set up the live view (1 TODO) and align the laser and photodiode until the dips are as deep as possible | `05_fan_live_view.py` | 20 min |
-| 2 | Measure the rig with a ruler: number of blades, beam radius from the hub, beam diameter at the fan. Enter them in `07_fan_analyse.py`. | — | 5 min |
-| 3 | Fill in the 3 DAQ TODOs and make a recording | `06_fan_record.py` | 10 min |
-| 4 | Fill in the 4 analysis TODOs and measure the blade width | `07_fan_analyse.py` | 30 min |
+| 2 | Count the blades and measure the beam's distance from the hub. Enter them in `07_fan_analyse.py`. | — | 5 min |
+| 3 | Fill in the 3 TODOs and record 1000 blade passes | `06_fan_record.py` | 15 min |
+| 4 | Fill in the 5 analysis TODOs and fit the blade width (and the beam's diameter) | `07_fan_analyse.py` | 30 min |
 | 5 | Switch off the laser and the fan at their supplies | — | — |
 
-The times include the investigation questions, which have you re-run 06 and 07 to check
-repeatability and the effect of the sample rate. Recordings are saved in `data/` as CSV
-files (`time_s`, `volts`), so you can re-analyse them later:
+The times include the investigation questions, which have you re-run 06 and 07 with
+different thresholds. Recordings are saved in `data/` as `.npz` files (the snippets, the
+crossing times and the sample rate), so you can re-analyse them later:
 
 ```bash
 uv run python exercises/07_fan_analyse.py                     # newest recording
-uv run python exercises/07_fan_analyse.py data/<file>.csv     # a particular recording
+uv run python exercises/07_fan_analyse.py data/<file>.npz     # a particular recording
 ```
 
 **No rig yet?** Set `SIMULATE = True` in `06_fan_record.py` to make a fake recording of a fan
-with 15 mm blades, and use them to check your analysis before the lab.
+with 15 mm blades and a 1 mm beam, and use it to check your analysis before the lab.
 
 ## How to work through a script
 
